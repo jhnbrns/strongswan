@@ -1000,5 +1000,6 @@ bool libcharon_init()
 		dbg(DBG_DMN, 1, "integrity check of libcharon failed");
 		this->integrity_failed = TRUE;
 	}
+dbg(DBG_DMN,1,"JOHNBURNS");
 	return !this->integrity_failed;
 }
