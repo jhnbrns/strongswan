@@ -804,7 +804,7 @@ METHOD(ike_sa_t, send_dpd, status_t,
 	/* recheck in "interval" seconds */
 	if (delay)
 	{
-		job = (job_t*)send_dpd_job_create(this->ike_sa_id);
+		job = (job_t*)send_dpd_job_create(this->ike_sa_id, 0, 0);
 		lib->scheduler->schedule_job(lib->scheduler, job, delay - diff);
 	}
 	if (task_queued)
@@ -2916,6 +2916,12 @@ METHOD(ike_sa_t, inherit_post, void,
 	}
 }
 
+METHOD(ike_sa_t, set_initiator_exchange_type, void,
+	private_ike_sa_t *this, exchange_type_t type)
+{
+	this->task_manager->set_initiator_exchange_type(this->task_manager, type);
+}
+
 METHOD(ike_sa_t, destroy, void,
 	private_ike_sa_t *this)
 {
@@ -3117,6 +3123,8 @@ ike_sa_t * ike_sa_create(ike_sa_id_t *ike_sa_id, bool initiator,
 			.queue_task = _queue_task,
 			.queue_task_delayed = _queue_task_delayed,
 			.adopt_child_tasks = _adopt_child_tasks,
+			.set_initiator_exchange_type = _set_initiator_exchange_type,
+
 #ifdef ME
 			.act_as_mediation_server = _act_as_mediation_server,
 			.get_server_reflexive_host = _get_server_reflexive_host,

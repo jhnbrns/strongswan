@@ -428,6 +428,7 @@ METHOD(stroke_control_t, rekey, void,
 	uint32_t id;
 	bool child, all, finished = FALSE;
 	ike_sa_t *ike_sa;
+	ike_sa_id_t *ike_sa_id;
 	enumerator_t *enumerator;
 
 	if (!parse_specifier(msg->terminate.name, &id, &name, &child, &all))
@@ -450,11 +451,14 @@ METHOD(stroke_control_t, rekey, void,
 				if ((name && streq(name, child_sa->get_name(child_sa))) ||
 					(id && id == child_sa->get_unique_id(child_sa)))
 				{
+					ike_sa_id = ike_sa->get_id(ike_sa);
 					lib->processor->queue_job(lib->processor,
 						(job_t*)rekey_child_sa_job_create(
 								child_sa->get_protocol(child_sa),
 								child_sa->get_spi(child_sa, TRUE),
-								ike_sa->get_my_host(ike_sa)));
+								ike_sa->get_my_host(ike_sa),
+								be64toh(ike_sa_id->get_initiator_spi(ike_sa_id)),
+								be64toh(ike_sa_id->get_responder_spi(ike_sa_id))));
 					if (!all)
 					{
 						finished = TRUE;

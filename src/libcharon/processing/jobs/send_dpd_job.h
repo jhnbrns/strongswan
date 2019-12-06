@@ -45,8 +45,10 @@ struct send_dpd_job_t {
  * Creates a job of type SEND_DPD.
  *
  * @param ike_sa_id		identification of the ike_sa as ike_sa_id_t object (gets cloned)
+ * @param spi_i                 The initiator SPI we are trying to send a DPD for
+ * @param spi_r                 The responder SPI we are trying to send a DPD for
  * @return				initiate_ike_sa_job_t object
  */
-send_dpd_job_t *send_dpd_job_create(ike_sa_id_t *ike_sa_id);
+send_dpd_job_t *send_dpd_job_create(ike_sa_id_t *ike_sa_id, uint64_t spi_i, uint64_t spi_r);
 
 #endif /** SEND_DPD_JOB_H_ @}*/

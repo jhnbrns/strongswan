@@ -180,6 +180,7 @@ typedef struct daemon_t daemon_t;
 
 #include <attributes/attribute_manager.h>
 #include <kernel/kernel_interface.h>
+#include <redis/redis_interface.h>
 #include <network/sender.h>
 #include <network/receiver.h>
 #include <network/socket_manager.h>
@@ -244,6 +245,11 @@ struct daemon_t {
 	 * Kernel interface to communicate with kernel
 	 */
 	kernel_interface_t *kernel;
+
+	/**
+	 * Redis interface to communicate with redis
+	 */
+	redis_interface_t *redis;
 
 	/**
 	 * A ike_sa_manager_t instance.

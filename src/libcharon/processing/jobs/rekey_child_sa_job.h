@@ -46,9 +46,12 @@ struct rekey_child_sa_job_t {
  * @param protocol	protocol of the CHILD_SA
  * @param spi		security parameter index of the CHILD_SA
  * @param dst		SA destination address
+ * @param spi_i		IKE_SA initiatior SPI (zero if unknown when job is created)
+ * @param spi_r		IKE_SA responder SPI (zero if unknown when job is created)
  * @return			rekey_child_sa_job_t object
  */
 rekey_child_sa_job_t *rekey_child_sa_job_create(protocol_id_t protocol,
-												uint32_t spi, host_t *dst);
+												uint32_t spi, host_t *dst,
+												uint64_t spi_i, uint64_t spi_r);
 
 #endif /** REKEY_CHILD_SA_JOB_H_ @}*/

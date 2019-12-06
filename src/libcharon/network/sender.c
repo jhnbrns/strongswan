@@ -141,6 +141,9 @@ static job_requeue_t send_packets(private_sender_t *this)
 {
 	packet_t *packet;
 	bool oldstate;
+	uint32_t max_wait = 3 * 1000000;        /* 3 seconds at most */
+	uint32_t count = 0;     /* How many times we wait */
+	uint32_t wait_interval = 250000;
 
 	this->mutex->lock(this->mutex);
 	while (this->list->get_count(this->list) == 0)
@@ -158,7 +161,17 @@ static job_requeue_t send_packets(private_sender_t *this)
 	this->sent->signal(this->sent);
 	this->mutex->unlock(this->mutex);
 
-	charon->socket->send(charon->socket, packet);
+	while ((count * wait_interval) < max_wait)
+	{
+		if (charon->socket->send(charon->socket, packet) == SUCCESS)
+		{
+			goto out;
+		}
+		DBG1(DBG_NET, "send_packets: Caught error sending packets, sleeping and trying again");
+		count++;
+		usleep(wait_interval);
+	}
+out:
 	packet->destroy(packet);
 	return JOB_REQUEUE_DIRECT;
 }

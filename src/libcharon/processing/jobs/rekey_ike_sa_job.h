@@ -44,6 +44,8 @@ struct rekey_ike_sa_job_t {
  *
  * @param ike_sa_id		ID of the IKE_SA to rekey
  * @param reauth		TRUE to reauthenticate peer, FALSE for rekeying only
+ * @param spi_i			IKE_SA initiator SPI (zero if unknown)
+ * @param spi_r			IKE_SA responder SPI (zero if unknown)
  * @return				rekey_ike_sa_job_t object
  */
 rekey_ike_sa_job_t *rekey_ike_sa_job_create(ike_sa_id_t *ike_sa_id, bool reauth);

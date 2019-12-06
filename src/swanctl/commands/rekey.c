@@ -22,7 +22,7 @@ static int rekey(vici_conn_t *conn)
 	vici_req_t *req;
 	vici_res_t *res;
 	command_format_options_t format = COMMAND_FORMAT_NONE;
-	char *arg, *child = NULL, *ike = NULL;
+	char *arg, *child = NULL, *ike = NULL, *spi_i = NULL, *spi_r = NULL;
 	int ret = 0, child_id = 0, ike_id = 0;
 	bool reauth = FALSE;
 
@@ -53,6 +53,12 @@ static int rekey(vici_conn_t *conn)
 			case 'a':
 				reauth = TRUE;
 				continue;
+			case 'n':
+				spi_i = arg;
+				continue;
+			case 'e':
+				spi_r = arg;
+				continue;
 			case EOF:
 				break;
 			default:
@@ -69,6 +75,14 @@ static int rekey(vici_conn_t *conn)
 	if (ike)
 	{
 		vici_add_key_valuef(req, "ike", "%s", ike);
+	}
+	if (spi_i)
+	{
+		vici_add_key_valuef(req, "spi_i", "%s", spi_i);
+	}
+	if (spi_r)
+	{
+		vici_add_key_valuef(req, "spi_r", "%s", spi_r);
 	}
 	if (child_id)
 	{
@@ -129,6 +143,8 @@ static void __attribute__ ((constructor))reg()
 			{"reauth",		'a', 0, "reauthenticate instead of rekey an IKEv2 SA"},
 			{"raw",			'r', 0, "dump raw response message"},
 			{"pretty",		'P', 0, "dump raw response message in pretty print"},
+			{"spi_i",		'n', 1, "initiator SPI"},
+			{"spi_r",		'e', 1, "responder SPI"},
 		}
 	});
 }

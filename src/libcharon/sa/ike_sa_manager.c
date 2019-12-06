@@ -432,6 +432,11 @@ struct private_ike_sa_manager_t {
 	 * Configured IKE_SA limit, if any
 	 */
 	u_int ikesa_limit;
+
+	/**
+	 * Boolean value, do we close connections on close or leave them open.
+	 */
+	bool close_connections;
 };
 
 /**
@@ -1257,7 +1262,7 @@ static uint32_t get_message_id_or_hash(message_t *message)
 }
 
 METHOD(ike_sa_manager_t, checkout_by_message, ike_sa_t*,
-	private_ike_sa_manager_t* this, message_t *message)
+	private_ike_sa_manager_t* this, message_t *message, bool *already_processing)
 {
 	u_int segment;
 	entry_t *entry;
@@ -1265,6 +1270,9 @@ METHOD(ike_sa_manager_t, checkout_by_message, ike_sa_t*,
 	ike_sa_id_t *id;
 	ike_version_t ike_version;
 	bool is_init = FALSE;
+
+	/* By default we are not already processing a message */
+	*already_processing = FALSE;
 
 	id = message->get_ike_sa_id(message);
 	/* clone the IKE_SA ID so we can modify the initiator flag */
@@ -1385,6 +1393,8 @@ METHOD(ike_sa_manager_t, checkout_by_message, ike_sa_t*,
 		{
 			DBG1(DBG_MGR, "ignoring request with ID %u, already processing",
 				 entry->processing);
+			/* Indicate we are already processing a message */
+			*already_processing = TRUE;
 		}
 		else if (wait_for_entry(this, entry, segment))
 		{
@@ -2282,6 +2292,10 @@ METHOD(ike_sa_manager_t, flush, void,
 	enumerator = create_table_enumerator(this);
 	while (enumerator->enumerate(enumerator, &entry, &segment))
 	{
+		if (this->close_connections == FALSE)
+		{
+			entry->ike_sa->set_state(entry->ike_sa, IKE_PASSIVE);
+		}
 		charon->bus->set_sa(charon->bus, entry->ike_sa);
 		entry->ike_sa->delete(entry->ike_sa, TRUE);
 	}
@@ -2406,6 +2420,7 @@ ike_sa_manager_t *ike_sa_manager_create()
 	this->ikesa_limit = lib->settings->get_int(lib->settings,
 											   "%s.ikesa_limit", 0, lib->ns);
 
+	this->close_connections = lib->settings->get_bool(lib->settings, "%s.close_connections_at_exit", TRUE, lib->ns);
 	this->table_size = get_nearest_powerof2(lib->settings->get_int(
 									lib->settings, "%s.ikesa_table_size",
 									DEFAULT_HASHTABLE_SIZE, lib->ns));

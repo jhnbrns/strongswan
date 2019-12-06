@@ -94,12 +94,15 @@ static void schedule_delayed_rekey(private_child_rekey_t *this)
 {
 	uint32_t retry;
 	job_t *job;
+	ike_sa_id_t *ike_sa_id = this->ike_sa->get_id(this->ike_sa);;
 
 	retry = RETRY_INTERVAL - (random() % RETRY_JITTER);
 	job = (job_t*)rekey_child_sa_job_create(
 						this->child_sa->get_protocol(this->child_sa),
 						this->child_sa->get_spi(this->child_sa, TRUE),
-						this->ike_sa->get_my_host(this->ike_sa));
+						this->ike_sa->get_my_host(this->ike_sa),
+						ike_sa_id->get_initiator_spi(ike_sa_id),
+						ike_sa_id->get_responder_spi(ike_sa_id));
 	DBG1(DBG_IKE, "CHILD_SA rekeying failed, trying again in %d seconds", retry);
 	this->child_sa->set_state(this->child_sa, CHILD_INSTALLED);
 	lib->scheduler->schedule_job(lib->scheduler, job, retry);

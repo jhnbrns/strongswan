@@ -69,6 +69,13 @@ processing/jobs/roam_job.c processing/jobs/roam_job.h \
 processing/jobs/update_sa_job.c processing/jobs/update_sa_job.h \
 processing/jobs/inactivity_job.c processing/jobs/inactivity_job.h \
 processing/jobs/initiate_tasks_job.c processing/jobs/initiate_tasks_job.h \
+redis/redis_dh.c redis/redis_dh.h \
+redis/redis_interface.c redis/redis_interface.h \
+redis/redis_load_ike.c redis/redis_load_ike.h \
+redis/redis_publish_job.c redis/redis_publish_job.h \
+plugins/jitike/jitike_redis_sentinel.c plugins/jitike/jitike_redis_sentinel.h \
+redis/redis_child_rekey_job.c redis/redis_child_rekey_job.h \
+redis/redis_ike_rekey_job.c redis/redis_ike_rekey_job.h \
 sa/eap/eap_method.c sa/eap/eap_method.h sa/eap/eap_inner_method.h \
 sa/eap/eap_manager.c sa/eap/eap_manager.h \
 sa/xauth/xauth_method.c sa/xauth/xauth_method.h \
@@ -152,6 +159,7 @@ AM_CPPFLAGS = \
 	-I${linux_headers} \
 	-I$(top_srcdir)/src/libstrongswan \
 	-I$(top_srcdir)/src/libcharon \
+	-I$(top_srcdir)/src/libcharon/plugins/jitike \
 	-DIPSEC_DIR=\"${ipsecdir}\" \
 	-DIPSEC_PIDDIR=\"${piddir}\"
 
@@ -163,7 +171,7 @@ AM_LDFLAGS = \
 
 libcharon_la_LIBADD = \
   $(top_builddir)/src/libstrongswan/libstrongswan.la \
-  -lm $(PTHREADLIB) $(ATOMICLIB) $(DLLIB) $(SOCKLIB)
+  -lm $(PTHREADLIB) $(ATOMICLIB) $(DLLIB) $(SOCKLIB) -lcurl -l:libhiredis.a
 
 if USE_WINDOWS
   libcharon_la_LIBADD += -lws2_32
@@ -562,6 +570,13 @@ if USE_HA
   SUBDIRS += plugins/ha
 if MONOLITHIC
   libcharon_la_LIBADD += plugins/ha/libstrongswan-ha.la
+endif
+endif
+
+if USE_JITIKE
+  SUBDIRS += plugins/jitike
+if MONOLITHIC
+  libcharon_la_LIBADD += plugins/jitike/libstrongswan-jitike.la
 endif
 endif
 

@@ -939,6 +939,7 @@ private_daemon_t *daemon_create()
 	);
 	charon = &this->public;
 	this->public.kernel = kernel_interface_create();
+	this->public.redis = redis_interface_create();
 	this->public.attributes = attribute_manager_create();
 	this->public.controller = controller_create();
 	this->public.eap = eap_manager_create();
@@ -1000,6 +1001,5 @@ bool libcharon_init()
 		dbg(DBG_DMN, 1, "integrity check of libcharon failed");
 		this->integrity_failed = TRUE;
 	}
-dbg(DBG_DMN,1,"JOHNBURNS");
 	return !this->integrity_failed;
 }

@@ -16,6 +16,9 @@
 
 #include "process_message_job.h"
 
+#include <string.h>
+#include <inttypes.h>
+
 #include <daemon.h>
 
 typedef struct private_process_message_job_t private_process_message_job_t;
@@ -45,7 +48,8 @@ METHOD(job_t, destroy, void,
 METHOD(job_t, execute, job_requeue_t,
 	private_process_message_job_t *this)
 {
-	ike_sa_t *ike_sa;
+	ike_sa_t *ike_sa = NULL;
+	bool already_processing;
 
 #ifdef ME
 	/* if this is an unencrypted INFORMATIONAL exchange it is likely a
@@ -64,7 +68,31 @@ METHOD(job_t, execute, job_requeue_t,
 #endif /* ME */
 
 	ike_sa = charon->ike_sa_manager->checkout_by_message(charon->ike_sa_manager,
-														 this->message);
+														 this->message,
+														 &already_processing);
+
+	if (!ike_sa && (already_processing != TRUE) && (charon->redis != NULL))
+	{
+		uint64_t spi_i, spi_r;
+
+		spi_i = be64toh(this->message->get_initiator_spi(this->message));
+		spi_r = be64toh(this->message->get_responder_spi(this->message));
+
+		/* Try and load the IKE_SA from redis */
+		if (charon->redis->get_ike_from_redis(charon->redis, spi_i, spi_r) != 0)
+		{
+			DBG1(DBG_NET, "Cannot load IKE_SA from redis for IKE_SA with SPIs %.16"PRIx64"_i-%.16"PRIx64"_r",
+				spi_i, spi_r);
+		}
+		else
+		{
+			/* Now we can checkout the IKE_SA again */
+			ike_sa = charon->ike_sa_manager->checkout_by_message(charon->ike_sa_manager,
+														 this->message,
+														 &already_processing);
+		}
+	}
+
 	if (ike_sa)
 	{
 		DBG1(DBG_NET, "received packet: from %#H to %#H (%zu bytes)",

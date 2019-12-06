@@ -87,7 +87,7 @@ METHOD(kernel_listener_t, expire, bool,
 	else
 	{
 		lib->processor->queue_job(lib->processor,
-				(job_t*)rekey_child_sa_job_create(proto, spi, dst));
+				(job_t*)rekey_child_sa_job_create(proto, spi, dst, 0, 0));
 	}
 	return TRUE;
 }

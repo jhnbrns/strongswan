@@ -36,6 +36,12 @@ struct private_send_dpd_job_t {
 	 * ID of the IKE_SA which the message belongs to.
 	 */
 	ike_sa_id_t *ike_sa_id;
+
+	/**
+	 * The SPIs for the IKE_SA we are trying to send a DPD for.
+	 */
+	uint64_t spi_i;
+	uint64_t spi_r;
 };
 
 METHOD(job_t, destroy, void,
@@ -52,6 +58,20 @@ METHOD(job_t, execute, job_requeue_t,
 
 	ike_sa = charon->ike_sa_manager->checkout(charon->ike_sa_manager,
 											  this->ike_sa_id);
+	if (!ike_sa && (charon->redis != NULL) && this->spi_i && this->spi_r)
+	{
+                /* Try and load the IKE_SA from redis */
+                if (charon->redis->get_ike_from_redis(charon->redis, this->spi_i, this->spi_r) != 0)
+                {
+                        DBG1(DBG_NET, "Cannot load IKE_SA from redis for IKE_SA with SPIs %.16"PRIx64"_i-%.16"PRIx64"_r",
+                                this->spi_i, this->spi_r);
+                }
+                else
+                {
+			/* Now we can checkout the IKE_SA again */
+			ike_sa = charon->ike_sa_manager->checkout(charon->ike_sa_manager, this->ike_sa_id);
+                }
+	}
 	if (ike_sa)
 	{
 		if (ike_sa->send_dpd(ike_sa) == DESTROY_ME)
@@ -75,7 +95,7 @@ METHOD(job_t, get_priority, job_priority_t,
 /*
  * Described in header
  */
-send_dpd_job_t *send_dpd_job_create(ike_sa_id_t *ike_sa_id)
+send_dpd_job_t *send_dpd_job_create(ike_sa_id_t *ike_sa_id, uint64_t spi_i, uint64_t spi_r)
 {
 	private_send_dpd_job_t *this;
 
@@ -88,6 +108,8 @@ send_dpd_job_t *send_dpd_job_create(ike_sa_id_t *ike_sa_id)
 			},
 		},
 		.ike_sa_id = ike_sa_id->clone(ike_sa_id),
+		.spi_i = spi_i,
+		.spi_r = spi_r,
 	);
 
 	return &this->public;

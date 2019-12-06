@@ -15,6 +15,9 @@
 
 #include "rekey_child_sa_job.h"
 
+#include <string.h>
+#include <inttypes.h>
+
 #include <daemon.h>
 
 
@@ -44,6 +47,16 @@ struct private_rekey_child_sa_job_t {
 	 * SA destination address
 	 */
 	host_t *dst;
+
+	/**
+	 * IKE_SA initiator SPI (zero if unknown)
+	 */
+	uint64_t spi_i;
+
+	/**
+	 * IKE_SA responder SPI (zero if unknown)
+	 */
+	uint64_t spi_r;
 };
 
 METHOD(job_t, destroy, void,
@@ -56,10 +69,30 @@ METHOD(job_t, destroy, void,
 METHOD(job_t, execute, job_requeue_t,
 	private_rekey_child_sa_job_t *this)
 {
-	ike_sa_t *ike_sa;
+	ike_sa_t *ike_sa = NULL;
+	bool reset_mid = FALSE;
 
 	ike_sa = charon->child_sa_manager->checkout(charon->child_sa_manager,
 									this->protocol, this->spi, this->dst, NULL);
+	if (ike_sa == NULL && this->spi_i != 0 && this->spi_r != 0 && charon->redis != NULL)
+	{
+		/* Try and load the IKE_SA from redis */
+		if (charon->redis->get_ike_from_redis(charon->redis, this->spi_i, this->spi_r) != 0)
+		{
+			DBG1(DBG_NET, "Cannot load IKE_SA from redis for IKE_SA with SPIs %.16"PRIx64"_i-%.16"PRIx64"_r",
+					this->spi_i, this->spi_r);
+		}
+		else
+		{
+			/* Now we can checkout the IKE_SA again */
+			ike_sa = charon->child_sa_manager->checkout(charon->child_sa_manager,
+											this->protocol, this->spi, this->dst, NULL);
+
+			/* Ensure we reset the initiator MID */
+			reset_mid = TRUE;
+		}
+	}
+
 	if (ike_sa == NULL)
 	{
 		DBG1(DBG_JOB, "CHILD_SA %N/0x%08x/%H not found for rekey",
@@ -67,6 +100,12 @@ METHOD(job_t, execute, job_requeue_t,
 	}
 	else
 	{
+		if (reset_mid == TRUE)
+		{
+			/* And reset the initiator MID */
+			ike_sa->set_message_id(ike_sa, 0, UINT_MAX);
+		}
+
 		if (ike_sa->get_state(ike_sa) != IKE_PASSIVE)
 		{
 			ike_sa->rekey_child_sa(ike_sa, this->protocol, this->spi);
@@ -86,7 +125,8 @@ METHOD(job_t, get_priority, job_priority_t,
  * Described in header
  */
 rekey_child_sa_job_t *rekey_child_sa_job_create(protocol_id_t protocol,
-												uint32_t spi, host_t *dst)
+												uint32_t spi, host_t *dst,
+												uint64_t spi_i, uint64_t spi_r)
 {
 	private_rekey_child_sa_job_t *this;
 
@@ -101,6 +141,8 @@ rekey_child_sa_job_t *rekey_child_sa_job_create(protocol_id_t protocol,
 		.protocol = protocol,
 		.spi = spi,
 		.dst = dst->clone(dst),
+		.spi_i = spi_i,
+		.spi_r = spi_r,
 	);
 
 	return &this->public;

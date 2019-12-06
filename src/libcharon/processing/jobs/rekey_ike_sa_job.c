@@ -15,6 +15,9 @@
 
 #include "rekey_ike_sa_job.h"
 
+#include <string.h>
+#include <inttypes.h>
+
 #include <daemon.h>
 
 typedef struct private_rekey_ike_sa_job_t private_rekey_ike_sa_job_t;
@@ -85,18 +88,46 @@ static uint32_t get_retry_delay(ike_sa_t *ike_sa)
 METHOD(job_t, execute, job_requeue_t,
 	private_rekey_ike_sa_job_t *this)
 {
-	ike_sa_t *ike_sa;
+	ike_sa_t *ike_sa = NULL;
 	status_t status = SUCCESS;
 	uint32_t retry = 0;
+	bool reset_mid = FALSE;
 
 	ike_sa = charon->ike_sa_manager->checkout(charon->ike_sa_manager,
 											  this->ike_sa_id);
+	if (ike_sa == NULL && charon->redis != NULL)
+	{
+		uint64_t spi_i = be64toh(this->ike_sa_id->get_initiator_spi(this->ike_sa_id));
+		uint64_t spi_r = be64toh(this->ike_sa_id->get_responder_spi(this->ike_sa_id));
+
+		/* Try and load the IKE_SA from redis */
+		if (charon->redis->get_ike_from_redis(charon->redis, spi_i, spi_r) != 0)
+		{
+			DBG1(DBG_NET, "Cannot load IKE_SA from redis for IKE_SA with SPIs %.16"PRIx64"_i-%.16"PRIx64"_r",
+					spi_i, spi_r);
+		}
+		else
+		{
+			/* Now we can checkout the IKE_SA again */
+			ike_sa = charon->ike_sa_manager->checkout(charon->ike_sa_manager, this->ike_sa_id);
+
+			/* Make sure we reset the initiator MID */
+			reset_mid = TRUE;
+		}
+	}
+
 	if (ike_sa == NULL)
 	{
 		DBG2(DBG_JOB, "IKE_SA to rekey not found");
 	}
 	else
 	{
+		if (reset_mid == TRUE)
+		{
+			/* And reset the initiator MID */
+			ike_sa->set_message_id(ike_sa, 0, UINT_MAX);
+		}
+
 		if (this->reauth)
 		{
 			retry = get_retry_delay(ike_sa);

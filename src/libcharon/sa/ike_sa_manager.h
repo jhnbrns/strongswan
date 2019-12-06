@@ -86,11 +86,12 @@ struct ike_sa_manager_t {
 	 * NULL is returned.
 	 *
 	 * @param ike_sa_id			the SA identifier, will be updated
+         * @param already_processing		true if we're already processing this message
 	 * @returns
 	 * 							- checked out/created IKE_SA
 	 * 							- NULL to not process message further
 	 */
-	ike_sa_t* (*checkout_by_message) (ike_sa_manager_t* this, message_t *message);
+	ike_sa_t* (*checkout_by_message) (ike_sa_manager_t* this, message_t *message, bool *already_processing);
 
 	/**
 	 * Checkout an IKE_SA for initiation by a peer_config.

@@ -300,6 +300,13 @@ struct task_manager_t {
 	void (*flush_queue)(task_manager_t *this, task_queue_t queue);
 
 	/**
+	 * Set the exchange_type_t of the initiator for this task manager
+	 *
+	 * @param type                  exchange_type_t to set this to.
+	 */
+	void (*set_initiator_exchange_type)(task_manager_t *this, exchange_type_t type);
+
+	/**
 	 * Destroy the task_manager_t.
 	 */
 	void (*destroy) (task_manager_t *this);

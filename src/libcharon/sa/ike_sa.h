@@ -242,6 +242,11 @@ enum ike_condition_t {
 	 * A Postquantum Preshared Key was used when this IKE_SA was created
 	 */
 	COND_PPK = (1<<13),
+
+	/**
+	 * Fatal error during IKE_SA setup
+	 */
+	COND_FATAL = (1<<14),
 };
 
 /**
@@ -1203,6 +1208,13 @@ struct ike_sa_t {
 	 * @param new_spi		TRUE to allocate a new initiator SPI
 	 */
 	void (*reset) (ike_sa_t *this, bool new_spi);
+
+	/**
+	 * Set the exchange type for this intiiator
+	 *
+	 * @param type                  exchange_type_t
+	 */
+	void (*set_initiator_exchange_type) (ike_sa_t *this, exchange_type_t type);
 
 	/**
 	 * Destroys a ike_sa_t object.

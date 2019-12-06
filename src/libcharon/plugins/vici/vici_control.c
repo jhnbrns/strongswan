@@ -26,6 +26,9 @@
 #include <processing/jobs/rekey_ike_sa_job.h>
 #include <processing/jobs/rekey_child_sa_job.h>
 #include <processing/jobs/redirect_job.h>
+#include <processing/jobs/send_dpd_job.h>
+#include <redis/redis_child_rekey_job.h>
+#include <redis/redis_ike_rekey_job.h>
 
 typedef struct private_vici_control_t private_vici_control_t;
 
@@ -376,20 +379,24 @@ CALLBACK(rekey, vici_message_t*,
 	private_vici_control_t *this, char *name, u_int id, vici_message_t *request)
 {
 	enumerator_t *isas, *csas;
-	char *child, *ike, *errmsg = NULL;
+	char *child, *ike, *j_spi_i, *j_spi_r, *errmsg = NULL;
 	u_int child_id, ike_id, found = 0;
 	ike_sa_t *ike_sa;
+	ike_sa_id_t *ike_sa_id;
 	child_sa_t *child_sa;
 	vici_builder_t *builder;
 	bool reauth;
+	uint64_t spi_i, spi_r;
 
 	child = request->get_str(request, NULL, "child");
 	ike = request->get_str(request, NULL, "ike");
+	j_spi_i = request->get_str(request, NULL, "spi_i");
+	j_spi_r = request->get_str(request, NULL, "spi_r");
 	child_id = request->get_int(request, 0, "child-id");
 	ike_id = request->get_int(request, 0, "ike-id");
 	reauth = request->get_bool(request, FALSE, "reauth");
 
-	if (!child && !ike && !ike_id && !child_id)
+	if (!child && !ike && !ike_id && !child_id && !j_spi_i && !j_spi_r)
 	{
 		return send_reply(this, "missing rekey selector");
 	}
@@ -410,10 +417,21 @@ CALLBACK(rekey, vici_message_t*,
 	{
 		DBG1(DBG_CFG, "vici rekey CHILD_SA '%s'", child);
 	}
+	if (j_spi_i)
+	{
+		DBG1(DBG_CFG, "vici rekey spi_i '%s'", j_spi_i);
+		spi_i = strtoull(j_spi_i, NULL, 16);
+	}
+	if (j_spi_r)
+	{
+		DBG1(DBG_CFG, "vici rekey spi_r '%s'", j_spi_r);
+		spi_r = strtoull(j_spi_r, NULL, 16);
+	}
 
 	isas = charon->controller->create_ike_sa_enumerator(charon->controller, TRUE);
 	while (isas->enumerate(isas, &ike_sa))
 	{
+		ike_sa_id = ike_sa->get_id(ike_sa);
 		if (child || child_id)
 		{
 			if (ike && !streq(ike, ike_sa->get_name(ike_sa)))
@@ -435,17 +453,22 @@ CALLBACK(rekey, vici_message_t*,
 				{
 					continue;
 				}
+				ike_sa_id = ike_sa->get_id(ike_sa);
 				lib->processor->queue_job(lib->processor,
 						(job_t*)rekey_child_sa_job_create(
 											child_sa->get_protocol(child_sa),
 											child_sa->get_spi(child_sa, TRUE),
-											ike_sa->get_my_host(ike_sa)));
+											ike_sa->get_my_host(ike_sa),
+											be64toh(ike_sa_id->get_initiator_spi(ike_sa_id)),
+											be64toh(ike_sa_id->get_responder_spi(ike_sa_id))));
 				found++;
 			}
 			csas->destroy(csas);
 		}
 		else if ((ike && streq(ike, ike_sa->get_name(ike_sa))) ||
-				 (ike_id && ike_id == ike_sa->get_unique_id(ike_sa)))
+				 (ike_id && ike_id == ike_sa->get_unique_id(ike_sa)) ||
+				 ((j_spi_i && spi_i == be64toh(ike_sa_id->get_initiator_spi(ike_sa_id))) &&
+				 (j_spi_r && spi_r == be64toh(ike_sa_id->get_responder_spi(ike_sa_id)))))
 		{
 			lib->processor->queue_job(lib->processor,
 				(job_t*)rekey_ike_sa_job_create(ike_sa->get_id(ike_sa), reauth));
@@ -454,6 +477,29 @@ CALLBACK(rekey, vici_message_t*,
 	}
 	isas->destroy(isas);
 
+	/* See if we need to check redis */
+	if (!found)
+	{
+		if (child || child_id)
+		{
+			if (charon->redis->initiate_child_rekey(charon->redis, spi_i, spi_r, ike, ike_id, child, child_id) != 0)
+			{
+				DBG1(DBG_NET, "Failed initiating rekey through redis");
+				errmsg = "failed initiating child rekey through redis";
+			}
+		}
+		else
+		{
+			if (charon->redis->initiate_ike_rekey(charon->redis, spi_i, spi_r) != 0)
+			{
+				DBG1(DBG_NET, "Failed initiating rekey through redis");
+				errmsg = "failed initiating ike rekey through redis";
+			}
+		}
+		found++;
+	}
+
+dpd_done:
 	builder = vici_builder_create();
 	if (!found)
 	{
@@ -461,6 +507,202 @@ CALLBACK(rekey, vici_message_t*,
 	}
 	builder->add_kv(builder, "success", errmsg ? "no" : "yes");
 	builder->add_kv(builder, "matches", "%u", found);
+	if (errmsg)
+	{
+		builder->add_kv(builder, "errmsg", "%s", errmsg);
+	}
+	return builder->finalize(builder);
+}
+
+CALLBACK(send_dpd, vici_message_t*,
+	private_vici_control_t *this, char *name, u_int id, vici_message_t *request)
+{
+	vici_builder_t *builder;
+	char *j_spi_i, *j_spi_r, *errmsg = NULL;
+	uint64_t spi_i, spi_r;
+	ike_sa_id_t *ike_sa_id;
+
+	j_spi_i = request->get_str(request, NULL, "spi_i");
+	j_spi_r = request->get_str(request, NULL, "spi_r");
+
+	if (!j_spi_i && !j_spi_r)
+	{
+		return send_reply(this, "missing rekey selector");
+	}
+
+	if (j_spi_i)
+	{
+		DBG1(DBG_CFG, "vici send_dpd spi_i '%s'", j_spi_i);
+		spi_i = strtoull(j_spi_i, NULL, 16);
+	}
+	if (j_spi_r)
+	{
+		DBG1(DBG_CFG, "vici send_dpd spi_r '%s'", j_spi_r);
+		spi_r = strtoull(j_spi_r, NULL, 16);
+	}
+
+	DBG2(DBG_CFG, "SENDING DPD for SPIs %.16"PRIx64"_i-%.16"PRIx64"_r", spi_i, spi_r);
+	ike_sa_id = ike_sa_id_create(IKEV2, htobe64(spi_i), htobe64(spi_r), FALSE);
+	if (ike_sa_id == NULL)
+	{
+		DBG1(DBG_CFG, "ERROR, cannot create ike_sa_id, failing");
+		errmsg = "cannot create ike_sa_id";
+		goto dpd_done;
+	}
+	/**
+	 * spi_i and spi_r are already in host byte order.
+	 */
+	lib->processor->queue_job(lib->processor, (job_t*)send_dpd_job_create(ike_sa_id, spi_i, spi_r));
+	ike_sa_id->destroy(ike_sa_id);
+
+dpd_done:
+	/**
+	 * Return builder information
+	 */
+	builder = vici_builder_create();
+	builder->add_kv(builder, "success", errmsg ? "no" : "yes");
+	if (errmsg)
+	{
+		builder->add_kv(builder, "errmsg", "%s", errmsg);
+	}
+	return builder->finalize(builder);
+}
+
+CALLBACK(ike_load, vici_message_t*,
+	private_vici_control_t *this, char *name, u_int id, vici_message_t *request)
+{
+	vici_builder_t *builder;
+	char *j_spi_i, *j_spi_r, *errmsg = NULL;
+	uint64_t spi_i, spi_r;
+	ike_sa_id_t *ike_sa_id = NULL;
+	ike_sa_t *ike_sa = NULL;
+
+	j_spi_i = request->get_str(request, NULL, "spi_i");
+	j_spi_r = request->get_str(request, NULL, "spi_r");
+
+	if (!j_spi_i && !j_spi_r)
+	{
+		return send_reply(this, "missing ike_load selector");
+	}
+
+	if (j_spi_i)
+	{
+		DBG1(DBG_CFG, "vici ike_load spi_i '%s'", j_spi_i);
+		spi_i = strtoull(j_spi_i, NULL, 16);
+	}
+	if (j_spi_r)
+	{
+		DBG1(DBG_CFG, "vici ike_load spi_r '%s'", j_spi_r);
+		spi_r = strtoull(j_spi_r, NULL, 16);
+	}
+
+	ike_sa_id = ike_sa_id_create(IKEV2, htobe64(spi_i), htobe64(spi_r), FALSE);
+	ike_sa = charon->ike_sa_manager->checkout(charon->ike_sa_manager, ike_sa_id);
+	if (ike_sa != NULL)
+	{
+		DBG2(DBG_CFG, "Local strongSwan already has SPIs %.16"PRIx64"_i-%.16"PRIx64"_r", spi_i, spi_r);
+		charon->ike_sa_manager->checkin(charon->ike_sa_manager, ike_sa);
+		errmsg = "ike_sa already loaded";
+	}
+	else
+	{
+		ike_sa_id->destroy(ike_sa_id);
+		ike_sa_id = ike_sa_id_create(IKEV2, htobe64(spi_i), htobe64(spi_r), TRUE);
+		ike_sa = charon->ike_sa_manager->checkout(charon->ike_sa_manager, ike_sa_id);
+		if (ike_sa != NULL)
+		{
+			DBG2(DBG_CFG, "Local strongSwan already has SPIs %.16"PRIx64"_i-%.16"PRIx64"_r", spi_i, spi_r);
+			charon->ike_sa_manager->checkin(charon->ike_sa_manager, ike_sa);
+			errmsg = "ike_sa already loaded";
+		}
+		else
+		{
+			DBG2(DBG_CFG, "Loading IKE from Redis for SPIs %.16"PRIx64"_i-%.16"PRIx64"_r", spi_i, spi_r);
+			if (charon->redis->get_ike_from_redis(charon->redis, spi_i, spi_r) != 0)
+			{
+				DBG1(DBG_CFG, "ERROR cannot load IKE from Redis: %s_i-%s_r", j_spi_i, j_spi_r);
+				errmsg = "cannot load IKE from Redis";
+				/* Fall through */
+			}
+		}
+	}
+	if (ike_sa_id != NULL)
+	{
+		ike_sa_id->destroy(ike_sa_id);
+	}
+
+	/**
+	 * Return builder information
+	 */
+	builder = vici_builder_create();
+	builder->add_kv(builder, "success", errmsg ? "no" : "yes");
+	if (errmsg)
+	{
+		builder->add_kv(builder, "errmsg", "%s", errmsg);
+	}
+	return builder->finalize(builder);
+}
+
+CALLBACK(ike_unload, vici_message_t*,
+	private_vici_control_t *this, char *name, u_int id, vici_message_t *request)
+{
+	vici_builder_t *builder;
+	char *j_spi_i, *j_spi_r, *errmsg = NULL;
+	uint64_t spi_i, spi_r;
+	ike_sa_id_t *ike_sa_id = NULL;
+	ike_sa_t *ike_sa = NULL;
+
+	j_spi_i = request->get_str(request, NULL, "spi_i");
+	j_spi_r = request->get_str(request, NULL, "spi_r");
+
+	if (!j_spi_i && !j_spi_r)
+	{
+		return send_reply(this, "missing ike_unload selector");
+	}
+
+	if (j_spi_i)
+	{
+		DBG1(DBG_CFG, "vici ike_unload spi_i '%s'", j_spi_i);
+		spi_i = strtoull(j_spi_i, NULL, 16);
+	}
+	if (j_spi_r)
+	{
+		DBG1(DBG_CFG, "vici ike_unload spi_r '%s'", j_spi_r);
+		spi_r = strtoull(j_spi_r, NULL, 16);
+	}
+
+	DBG2(DBG_CFG, "Unloading IKE from local strongSwan for SPIs %.16"PRIx64"_i-%.16"PRIx64"_r", spi_i, spi_r);
+	ike_sa_id = ike_sa_id_create(IKEV2, htobe64(spi_i), htobe64(spi_r), FALSE);
+	ike_sa = charon->ike_sa_manager->checkout(charon->ike_sa_manager, ike_sa_id);
+	if (ike_sa == NULL)
+	{
+		ike_sa_id->destroy(ike_sa_id);
+		ike_sa_id = ike_sa_id_create(IKEV2, htobe64(spi_i), htobe64(spi_r), TRUE);
+		ike_sa = charon->ike_sa_manager->checkout(charon->ike_sa_manager, ike_sa_id);
+		if (ike_sa == NULL)
+		{
+			DBG1(DBG_CFG, "vici ike_unload: Cannot find IKE_SA for SPI %.16"PRIx64"_i %.16"PRIx64"_r",
+					be64toh(ike_sa_id->get_initiator_spi(ike_sa_id)),
+					be64toh(ike_sa_id->get_responder_spi(ike_sa_id)));
+			errmsg = "cannot checkout ike_sa";
+			goto out;
+		}
+	}
+	if (ike_sa_id != NULL)
+	{
+		ike_sa_id->destroy(ike_sa_id);
+	}
+
+	/* Set the state to PASSIVE and delete the IKE_SA */
+	ike_sa->set_state(ike_sa, IKE_PASSIVE);
+	charon->ike_sa_manager->checkin_and_destroy(charon->ike_sa_manager, ike_sa);
+
+	/**
+	 * Return builder information
+	 */
+out:
+	builder = vici_builder_create();
+	builder->add_kv(builder, "success", errmsg ? "no" : "yes");
 	if (errmsg)
 	{
 		builder->add_kv(builder, "errmsg", "%s", errmsg);
@@ -704,6 +946,9 @@ static void manage_commands(private_vici_control_t *this, bool reg)
 	manage_command(this, "initiate", initiate, reg);
 	manage_command(this, "terminate", terminate, reg);
 	manage_command(this, "rekey", rekey, reg);
+	manage_command(this, "send-dpd", send_dpd, reg);
+	manage_command(this, "ike-load", ike_load, reg);
+	manage_command(this, "ike-unload", ike_unload, reg);
 	manage_command(this, "redirect", redirect, reg);
 	manage_command(this, "install", install, reg);
 	manage_command(this, "uninstall", uninstall, reg);

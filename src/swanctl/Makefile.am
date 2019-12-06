@@ -25,6 +25,9 @@ swanctl_SOURCES = \
 	commands/version.c \
 	commands/stats.c \
 	commands/reload_settings.c \
+	commands/send_dpd.c \
+	commands/ike_load.c \
+	commands/ike_unload.c \
 	swanctl.c swanctl.h
 
 swanctl_LDADD = \

@@ -1635,7 +1635,7 @@ METHOD(task_manager_t, process_message, status_t,
 		}
 		else
 		{
-			DBG1(DBG_IKE, "received message ID %d, expected %d, ignored",
+			DBG1(DBG_IKE, "received responder message ID %d, expected %d, ignored",
 				 mid, this->responding.mid);
 		}
 	}
@@ -1680,7 +1680,7 @@ METHOD(task_manager_t, process_message, status_t,
 		}
 		else
 		{
-			DBG1(DBG_IKE, "received message ID %d, expected %d, ignored",
+			DBG1(DBG_IKE, "received initiator message ID %d, expected %d, ignored",
 				 mid, this->initiating.mid);
 			return SUCCESS;
 		}
@@ -2225,6 +2225,12 @@ METHOD(task_manager_t, remove_task, void,
 	}
 }
 
+METHOD(task_manager_t, set_initiator_exchange_type, void,
+	private_task_manager_t *this, exchange_type_t type)
+{
+	this->initiating.type = type;
+}
+
 METHOD(task_manager_t, destroy, void,
 	private_task_manager_t *this)
 {
@@ -2276,6 +2282,7 @@ task_manager_v2_t *task_manager_v2_create(ike_sa_t *ike_sa)
 				.remove_task = _remove_task,
 				.flush = _flush,
 				.flush_queue = _flush_queue,
+				.set_initiator_exchange_type = _set_initiator_exchange_type,
 				.destroy = _destroy,
 			},
 		},
