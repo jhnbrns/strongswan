@@ -4,10 +4,6 @@ set -e
 
 WS="`pwd`"
 
-cd ${WS}/jitike-protobuf
-sudo make all
-sudo make install
-
 sudo apt-get -y install libgmp-dev automake autoconf libtool pkg-config gettext \
     perl python flex bison gperf protobuf-compiler libprotobuf-dev libprotoc-dev
 
