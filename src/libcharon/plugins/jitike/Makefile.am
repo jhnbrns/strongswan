@@ -3,8 +3,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/libcharon \
 	-I$(top_srcdir)/src/libcharon/plugins/ha \
 	-I$(top_srcdir)/src/libcharon/redis \
-	-I/opt/src/cloud-vpn-protobuf/esp \
-	-I/opt/src/cloud-vpn-protobuf/ike \
+	-I/opt/src/jitike-protobuf/esp \
+	-I/opt/src/jitike-protobuf/ike \
 	-DIPSEC_PIDDIR=\"${piddir}\"
 
 AM_CFLAGS = \

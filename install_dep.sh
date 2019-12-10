@@ -15,6 +15,10 @@ git submodule update --init
 CFLAGS="-Wno-implicit-fallthrough -Wno-stringop-overflow -Wno-error=conversion" make
 sudo make install
 
+cd ${WS}/jitike-protobuf
+sudo make all
+sudo make install
+
 sudo ldconfig
 
 cd ${WS}/api
