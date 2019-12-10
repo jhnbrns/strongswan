@@ -4,6 +4,10 @@ set -e
 
 WS="`pwd`"
 
+cd ${WS}/jitike-protobuf
+sudo make all
+sudo make install
+
 sudo apt-get -y install libgmp-dev automake autoconf libtool pkg-config gettext \
     perl python flex bison gperf protobuf-compiler libprotobuf-dev libprotoc-dev
 
@@ -13,10 +17,6 @@ cd ${WS}/grpc
 git checkout v1.3.0
 git submodule update --init
 CFLAGS="-Wno-implicit-fallthrough -Wno-stringop-overflow -Wno-error=conversion" make
-sudo make install
-
-cd ${WS}/jitike-protobuf
-sudo make all
 sudo make install
 
 sudo ldconfig
