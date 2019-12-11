@@ -1,0 +1,69 @@
+/*
+ * Copyright (c) 2019 Cisco and/or its affiliates.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the
+ * Free Software Foundation; either version 2 of the License, or (at your
+ * option) any later version.  See <http://www.fsf.org/copyleft/gpl.txt>.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * for more details.
+ */
+
+syntax = "proto3";
+
+package esp;
+
+message data_node_child_sa_t {
+	string src_ip = 1;
+	string dst_ip = 2;
+	uint32 src_port = 3;
+	uint32 dst_port = 4;
+	uint32 mark = 5;
+	uint32 reqid = 6;
+	bool up = 7;
+	uint64 initiator_spi = 8;
+	uint64 responder_spi = 9;
+	string connection_name = 10;
+	string child_remote_traffic_selector = 11;
+	string ike_remote_id = 12;
+	string ike_integ_alg = 13;
+	string event_name = 14;
+	string child_integ_alg = 15;
+
+	/*
+	 * All the fields below here are optional.
+	 * In protobuf version 3, all fields are optional by default,
+	 * so the `optional` keyword is no longer required.
+	 */
+
+	string in_auth_name = 16;
+	bytes in_auth_key = 17;
+	uint32 in_auth_trunc_len = 18;
+
+	string out_auth_name = 19;
+	bytes out_auth_key = 20;
+	uint32 out_auth_trunc_len = 21;
+
+	string in_aead_name = 22;
+	bytes in_aead_key = 23;
+	uint32 in_aead_trunc_len = 24;
+
+	string out_aead_name = 25;
+	bytes out_aead_key = 26;
+	uint32 out_aead_trunc_len = 27;
+
+	string in_crypto_name = 28;
+	bytes in_crypto_key = 29;
+	uint32 in_crypto_trunc_len = 30;
+
+	string out_crypto_name = 31;
+	bytes out_crypto_key = 32;
+	uint32 out_crypto_trunc_len = 33;
+}
+
+message data_node_esp_t {
+	repeated data_node_child_sa_t child_sa = 1;
+}

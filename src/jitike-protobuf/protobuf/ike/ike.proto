@@ -1,0 +1,127 @@
+/*
+ * Copyright (c) 2019 Cisco and/or its affiliates.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the
+ * Free Software Foundation; either version 2 of the License, or (at your
+ * option) any later version.  See <http://www.fsf.org/copyleft/gpl.txt>.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * for more details.
+ */
+
+syntax = "proto3";
+
+package ike;
+
+ /*
+  * JITIKE_IKE_ID
+  * JITIKE_IKE_REKEY_ID
+  */
+message ike_sa_id_encoding_t {
+    uint32 ike_version=1;
+    uint64 initiator_spi=2;
+    uint64 responder_spi=3;
+    uint32 initiator=4;
+}
+
+/*
+ * JITIKE_LOCAL_ID
+ * JITIKE_REMOTE_ID
+ * JITIKE_REMOTE_EAP_ID
+ */
+message identification_encoding_t {
+    uint32 type=1;
+    uint32 len=2;
+    bytes encoding=3;
+}
+
+/*
+ * JITIKE_LOCAL_ADDR
+ * JITIKE_REMOTE_ADDR
+ * JITIKE_LOCAL_VIP
+ * JITIKE_REMOTE_VIP
+ * JITIKE_PEER_ADDR
+ */
+message host_encoding_t {
+    uint32 port=1;
+    uint32 family=2;
+    uint32 len=3;
+    bytes encoding=4;
+}
+
+/*
+ * JITIKE_CONFIG_NAME
+ */
+message config_name_encoding_t {
+    string name=1;
+}
+
+/*
+ * JITIKE_IKE_VERSION
+ * JITIKE_INITIATOR
+ * JITIKE_IPSEC_MODE
+ * JITIKE_IPCOMP
+ */
+message uint8_encoding_t {
+    uint32 data=1;
+}
+
+/*
+ * JITIKE_ALG_DH
+ * JITIKE_ALG_PRF
+ * JITIKE_ALG_OLD_PRF
+ * JITIKE_ALG_ENCR
+ * JITIKE_ALG_ENCR_LEN
+ * JITIKE_ALG_INTEG
+ * JITIKE_INBOUND_CPI
+ * JITIKE_OUTBOUND_CPI
+ * JITIKE_SEGMENT
+ * JITIKE_ESN
+ * JITIKE_AUTH_METHOD
+ */
+message uint16_encoding_t {
+    uint32 data=1;
+}
+
+/*
+ * JITIKE_CONDITIONS
+ * JITIKE_EXTENSIONS
+ * JITIKE_INBOUND_SPI
+ * JITIKE_OUTBOUND_SPI
+ * JITIKE_MID
+ */
+message uint32_encoding_t {
+    uint32 data=1;
+}
+
+/*
+ * JITIKE_NONCE_I
+ * JITIKE_NONCE_R
+ * JITIKE_SECRET
+ * JITIKE_LOCAL_DH
+ * JITIKE_REMOTE_DH
+ * JITIKE_PSK
+ * JITIKE_IV
+ * JITIKE_OLD_SKD
+ */
+message chunk_encoding_t {
+    uint32 len=1;
+    bytes data=2;
+}
+
+/*
+ * JITIKE_LOCAL_TS
+ * JITIKE_REMOTE_TS
+ */
+message ts_encoding_t {
+    uint32 type=1;
+    uint32 protocol=2;
+    uint32 from_port=3;
+    uint32 to_port=4;
+    uint32 dynamic=5;
+    uint32 bytes_len=6;
+    bytes data=7;
+}

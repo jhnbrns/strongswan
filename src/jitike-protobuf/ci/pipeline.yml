@@ -1,0 +1,125 @@
+resource_types:
+- name: pull-request
+  type: docker-image
+  source:
+    repository: registry2.quadra.opendns.com:443/slvpn/github-pr-resource
+    tag: prod
+    username: ((quadra_user))
+    password: ((quadra_token))
+
+
+resources:
+- name: cloud-vpn-protobuf
+  type: git
+  source:
+    uri: git@github.office.opendns.com:slvpn/cloud-vpn-protobuf.git
+    branch: "master"
+    private_key: ((git_private_key))
+
+- name: artifacts
+  type: s3
+  source:
+    bucket: neteng-vpn-artifacts
+    region_name: us-east-1
+    regexp: artifacts/cloud-vpn-protobuf_(.*).deb
+    server_side_encryption: "AES256"
+    access_key_id: ((artifacts_aws_access_key_id))
+    secret_access_key: ((artifacts_aws_secret_access_key))
+
+- name: version
+  type: semver
+  source:
+    bucket: neteng-vpn-artifacts
+    region_name: us-east-1
+    key: protobuf/current-version
+    initial_version: 0.0.1
+    access_key_id: ((artifacts_aws_access_key_id))
+    secret_access_key: ((artifacts_aws_secret_access_key))
+
+- name: cloud-vpn-protobuf-pr
+  type: pull-request
+  source:
+    repository: slvpn/cloud-vpn-protobuf
+    v3_endpoint: https://github.office.opendns.com/api/v3/
+    v4_endpoint: https://github.office.opendns.com/api/graphql
+    access_token: ((neteng-ci-bot_git_access_token))
+
+# Location that the docker images are stored.  Image name contains the API version in it's name to keep things separate
+- name: docker-image
+  type: docker-image
+  source:
+    repository: registry2.quadra.opendns.com:443/cloudvpn/protobuf
+    username: ((quadra_user))
+    password: ((quadra_token))
+
+
+jobs:
+
+- name: PR Builder
+  plan:
+  - get: version
+  - get: cloud-vpn-protobuf-pr
+    trigger: true
+    version: every
+  - put: cloud-vpn-protobuf-pr
+    params:
+      path: cloud-vpn-protobuf-pr
+      status: pending
+      context: build-protobuf-pr
+  - task: build-protobuf-pr
+    file: cloud-vpn-protobuf-pr/ci/tasks/build-pr.yml
+    on_failure:
+      put: cloud-vpn-protobuf-pr
+      params:
+        path: cloud-vpn-protobuf-pr
+        status: failure
+        context: build-protobuf-pr
+  - put: cloud-vpn-protobuf-pr
+    params:
+      path: cloud-vpn-protobuf-pr
+      status: success
+      context: build-protobuf-pr
+
+- name: build
+  plan:
+  - get: cloud-vpn-protobuf
+    trigger: true
+
+  - put: version
+    params: {pre: rc}
+
+  # Build the binary.  The output of this will be a versioned binary
+  - task: build
+    file: cloud-vpn-protobuf/ci/tasks/build.yml
+
+  # Build the docker image and upload to the repository
+  - put: docker-image
+    params:
+      build: artifacts
+      tag: version/version
+      tag_as_latest: true
+
+  # Copy the binary to S3
+  - put: artifacts
+    params: { file: artifacts/cloud-vpn-protobuf_*.deb }
+
+# Bump the major version for subsequent builds
+- name: major
+  serial_groups: [update_version]
+  plan:
+  - put: version
+    params: {bump: major, pre: rc}
+
+# Bump the minor version for subsequent builds
+- name: minor
+  serial_groups: [update_version]
+  plan:
+  - put: version
+    params: {bump: minor, pre: rc}
+
+# Bump the minor version for subsequent builds
+- name: patch
+  serial_groups: [update_version]
+  plan:
+  - put: version
+    params: {bump: patch, pre: rc}
