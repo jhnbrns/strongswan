@@ -1,5 +1,5 @@
 
-cd src/lljitike-protobuf &&
+cd src/jitike-protobuf &&
 make all &&
 make install &&
 cd ../.. &&
